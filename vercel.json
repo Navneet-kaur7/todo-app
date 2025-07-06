@@ -13,6 +13,11 @@
       }
     }
   ],
+   "build": {
+    "env": {
+      "CI": "false"
+    }
+  },
   "routes": [
     {
       "src": "/api/(.*)",
