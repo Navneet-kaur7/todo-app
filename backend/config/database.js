@@ -12,16 +12,14 @@ const connectDB = async () => {
     console.log('URI:', process.env.MONGODB_URI ? 'URI is set' : 'URI is NOT set');
 
     const conn = await mongoose.connect(process.env.MONGODB_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-      // Increase timeouts for Atlas
+      // Remove deprecated options and use only supported ones
       serverSelectionTimeoutMS: 30000, // 30 seconds
       socketTimeoutMS: 45000, // 45 seconds
       connectTimeoutMS: 30000, // 30 seconds
-      maxPoolSize: 10,
-      minPoolSize: 5,
-      bufferMaxEntries: 0, // Disable mongoose buffering
-      bufferCommands: false, // Disable mongoose buffering
+      maxPoolSize: 10, // Maintain up to 10 socket connections
+      minPoolSize: 5, // Maintain a minimum of 5 socket connections
+      maxIdleTimeMS: 30000, // Close connections after 30 seconds of inactivity
+      // Remove bufferMaxEntries and bufferCommands - they're deprecated
     });
 
     console.log(`✅ MongoDB Connected: ${conn.connection.host}`);

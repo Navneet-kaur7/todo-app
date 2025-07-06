@@ -1,7 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, X, Check, Loader2, Trash2 } from 'lucide-react';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+// Use consistent API base URL configuration
+const API_BASE_URL = process.env.REACT_APP_API_URL || 
+  (process.env.NODE_ENV === 'production' 
+    ? '/api'  // Use relative path in production
+    : 'http://localhost:5000/api');
 
 export default function TodoApp() {
   const [tasks, setTasks] = useState([]);
@@ -11,9 +15,9 @@ export default function TodoApp() {
   const [error, setError] = useState(null);
   const [taskLoading, setTaskLoading] = useState({}); // Track loading state for individual tasks
 
-  // Get auth token from localStorage - FIXED: using consistent key
+  // Get auth token from localStorage - Using consistent key
   const getAuthToken = () => {
-    return localStorage.getItem('todoapp_token'); // Changed from 'token' to 'todoapp_token'
+    return localStorage.getItem('todoapp_token');
   };
 
   // Create headers with auth token
@@ -36,17 +40,25 @@ export default function TodoApp() {
         throw new Error('No authentication token found');
       }
 
-      console.log('Fetching tasks with token:', token ? 'Token present' : 'No token'); // Debug log
+      console.log('Fetching tasks from:', API_BASE_URL); // Debug log
+      console.log('Token present:', !!token); // Debug log
 
       const response = await fetch(`${API_BASE_URL}/tasks`, {
         headers: getAuthHeaders()
       });
       
+      console.log('Response status:', response.status); // Debug log
+      
       if (!response.ok) {
         if (response.status === 401) {
-          throw new Error('Authentication failed. Please log in again.');
+          // Token might be expired, redirect to login
+          localStorage.removeItem('todoapp_token');
+          localStorage.removeItem('todoapp_user');
+          window.location.href = '/login';
+          return;
         }
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
       }
       
       const data = await response.json();
@@ -54,7 +66,7 @@ export default function TodoApp() {
       setTasks(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Error fetching tasks:', err);
-      setError(err.message || 'Failed to load tasks. Please check if the server is running.');
+      setError(err.message || 'Failed to load tasks. Please check your connection.');
     } finally {
       setLoading(false);
     }
@@ -82,12 +94,15 @@ export default function TodoApp() {
       console.log('Add task response status:', response.status); // Debug log
 
       if (!response.ok) {
-        const errorData = await response.json();
-        console.error('Add task error response:', errorData); // Debug log
-        
         if (response.status === 401) {
-          throw new Error('Authentication failed. Please log in again.');
+          localStorage.removeItem('todoapp_token');
+          localStorage.removeItem('todoapp_user');
+          window.location.href = '/login';
+          return;
         }
+        
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Add task error response:', errorData); // Debug log
         throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
       }
 
@@ -114,9 +129,13 @@ export default function TodoApp() {
 
       if (!response.ok) {
         if (response.status === 401) {
-          throw new Error('Authentication failed. Please log in again.');
+          localStorage.removeItem('todoapp_token');
+          localStorage.removeItem('todoapp_user');
+          window.location.href = '/login';
+          return;
         }
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
       }
 
       setTasks(tasks.filter(task => task.id !== id));
@@ -145,9 +164,13 @@ export default function TodoApp() {
 
       if (!response.ok) {
         if (response.status === 401) {
-          throw new Error('Authentication failed. Please log in again.');
+          localStorage.removeItem('todoapp_token');
+          localStorage.removeItem('todoapp_user');
+          window.location.href = '/login';
+          return;
         }
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
       }
 
       const updatedTask = await response.json();
@@ -171,9 +194,13 @@ export default function TodoApp() {
 
       if (!response.ok) {
         if (response.status === 401) {
-          throw new Error('Authentication failed. Please log in again.');
+          localStorage.removeItem('todoapp_token');
+          localStorage.removeItem('todoapp_user');
+          window.location.href = '/login';
+          return;
         }
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
       }
 
       setTasks(tasks.filter(task => !task.completed));
@@ -220,16 +247,19 @@ export default function TodoApp() {
             <h1 className="text-center fw-bold text-dark mb-4">
               To-Do App
               <small className="d-block text-muted fs-6 mt-1">
-                Connected to PostgreSQL
+                Connected to MongoDB Atlas
               </small>
             </h1>
             
-            {/* Debug Info */}
-            <div className="alert alert-info small mb-3">
-              Token: {getAuthToken() ? '✓ Present' : '✗ Missing'} | 
-              Tasks: {tasks.length} | 
-              API: {API_BASE_URL}
-            </div>
+            {/* Debug Info - Only show in development */}
+            {process.env.NODE_ENV === 'development' && (
+              <div className="alert alert-info small mb-3">
+                Token: {getAuthToken() ? '✓ Present' : '✗ Missing'} | 
+                Tasks: {tasks.length} | 
+                API: {API_BASE_URL} |
+                Env: {process.env.NODE_ENV}
+              </div>
+            )}
             
             {/* Error Message */}
             {error && (
@@ -316,7 +346,7 @@ export default function TodoApp() {
               ) : (
                 filteredTasks.map((task) => (
                   <div
-                    key={task.id}
+                    key={task.id || task._id}
                     className={`d-flex align-items-center gap-3 p-3 mb-2 border rounded-3 ${
                       task.completed
                         ? 'bg-light border-secondary'
@@ -324,12 +354,12 @@ export default function TodoApp() {
                     }`}
                     style={{ 
                       transition: 'all 0.2s ease',
-                      opacity: taskLoading[task.id] ? 0.6 : 1
+                      opacity: taskLoading[task.id || task._id] ? 0.6 : 1
                     }}
                   >
                     <button
-                      onClick={() => toggleTask(task.id)}
-                      disabled={taskLoading[task.id]}
+                      onClick={() => toggleTask(task.id || task._id)}
+                      disabled={taskLoading[task.id || task._id]}
                       className={`btn p-0 rounded-circle d-flex align-items-center justify-content-center ${
                         task.completed
                           ? 'btn-success'
@@ -341,7 +371,7 @@ export default function TodoApp() {
                         border: task.completed ? '2px solid #198754' : '2px solid #6c757d'
                       }}
                     >
-                      {taskLoading[task.id] ? (
+                      {taskLoading[task.id || task._id] ? (
                         <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} />
                       ) : (
                         task.completed && <Check size={14} />
@@ -360,8 +390,8 @@ export default function TodoApp() {
                     </span>
                     
                     <button
-                      onClick={() => deleteTask(task.id)}
-                      disabled={taskLoading[task.id]}
+                      onClick={() => deleteTask(task.id || task._id)}
+                      disabled={taskLoading[task.id || task._id]}
                       className="btn btn-link text-muted p-1"
                       style={{ 
                         transition: 'color 0.2s ease',
@@ -370,7 +400,7 @@ export default function TodoApp() {
                       onMouseEnter={(e) => e.target.style.color = '#dc3545'}
                       onMouseLeave={(e) => e.target.style.color = '#6c757d'}
                     >
-                      {taskLoading[task.id] ? (
+                      {taskLoading[task.id || task._id] ? (
                         <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} />
                       ) : (
                         <X size={16} />

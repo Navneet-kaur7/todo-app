@@ -17,7 +17,11 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+  // Use consistent API base URL configuration
+  const API_BASE_URL = process.env.REACT_APP_API_URL || 
+    (process.env.NODE_ENV === 'production' 
+      ? '/api'  // Use relative path in production
+      : 'http://localhost:5000/api');
 
   // Check if user is logged in on app start
   useEffect(() => {
@@ -26,9 +30,14 @@ export const AuthProvider = ({ children }) => {
         const savedToken = localStorage.getItem('todoapp_token');
         const savedUser = localStorage.getItem('todoapp_user');
         
+        console.log('Initializing auth...'); // Debug log
+        console.log('Saved token exists:', !!savedToken); // Debug log
+        console.log('API Base URL:', API_BASE_URL); // Debug log
+        
         if (savedToken && savedUser) {
           setToken(savedToken);
           setUser(JSON.parse(savedUser));
+          console.log('Auth initialized from localStorage'); // Debug log
         }
       } catch (error) {
         console.error('Error initializing auth:', error);
@@ -41,13 +50,15 @@ export const AuthProvider = ({ children }) => {
     };
 
     initializeAuth();
-  }, []);
+  }, [API_BASE_URL]);
 
   // Login function
   const login = async (email, password) => {
     try {
       setLoading(true);
       setError(null);
+
+      console.log('Attempting login to:', `${API_BASE_URL}/auth/login`); // Debug log
 
       const response = await fetch(`${API_BASE_URL}/auth/login`, {
         method: 'POST',
@@ -57,7 +68,10 @@ export const AuthProvider = ({ children }) => {
         body: JSON.stringify({ email, password }),
       });
 
+      console.log('Login response status:', response.status); // Debug log
+
       const data = await response.json();
+      console.log('Login response data:', data); // Debug log
 
       if (!response.ok) {
         throw new Error(data.message || 'Login failed');
@@ -69,11 +83,13 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem('todoapp_token', data.token);
       localStorage.setItem('todoapp_user', JSON.stringify(data.user));
 
-      return { success: true };
+      console.log('Login successful'); // Debug log
+      return { success: true, message: 'Login successful' };
     } catch (error) {
+      console.error('Login error:', error);
       const errorMessage = error.message || 'Login failed';
       setError(errorMessage);
-      return { success: false, error: errorMessage };
+      return { success: false, message: errorMessage };
     } finally {
       setLoading(false);
     }
@@ -85,6 +101,8 @@ export const AuthProvider = ({ children }) => {
       setLoading(true);
       setError(null);
 
+      console.log('Attempting registration to:', `${API_BASE_URL}/auth/register`); // Debug log
+
       const response = await fetch(`${API_BASE_URL}/auth/register`, {
         method: 'POST',
         headers: {
@@ -93,7 +111,10 @@ export const AuthProvider = ({ children }) => {
         body: JSON.stringify({ name, email, password }),
       });
 
+      console.log('Register response status:', response.status); // Debug log
+
       const data = await response.json();
+      console.log('Register response data:', data); // Debug log
 
       if (!response.ok) {
         throw new Error(data.message || 'Registration failed');
@@ -105,11 +126,13 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem('todoapp_token', data.token);
       localStorage.setItem('todoapp_user', JSON.stringify(data.user));
 
-      return { success: true };
+      console.log('Registration successful'); // Debug log
+      return { success: true, message: 'Registration successful' };
     } catch (error) {
+      console.error('Registration error:', error);
       const errorMessage = error.message || 'Registration failed';
       setError(errorMessage);
-      return { success: false, error: errorMessage };
+      return { success: false, message: errorMessage };
     } finally {
       setLoading(false);
     }
@@ -120,15 +143,20 @@ export const AuthProvider = ({ children }) => {
     try {
       // Optional: Call logout endpoint
       if (token) {
-        await fetch(`${API_BASE_URL}/auth/logout`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-        });
+        try {
+          await fetch(`${API_BASE_URL}/auth/logout`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+            },
+          });
+        } catch (logoutError) {
+          console.error('Logout API call failed:', logoutError);
+          // Continue with client-side logout even if API call fails
+        }
       }
     } catch (error) {
-      console.error('Logout API call failed:', error);
+      console.error('Logout error:', error);
     } finally {
       // Clear state and localStorage regardless of API call result
       setToken(null);
@@ -136,6 +164,7 @@ export const AuthProvider = ({ children }) => {
       setError(null);
       localStorage.removeItem('todoapp_token');
       localStorage.removeItem('todoapp_user');
+      console.log('Logout completed'); // Debug log
     }
   };
 
@@ -228,6 +257,7 @@ export const AuthProvider = ({ children }) => {
     isAuthenticated,
     getAuthHeaders,
     setError, // Allow manual error clearing
+    API_BASE_URL, // Expose API base URL for debugging
   };
 
   return (
