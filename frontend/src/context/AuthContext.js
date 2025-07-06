@@ -25,23 +25,38 @@ export const AuthProvider = ({ children }) => {
   // Utility function to make API calls with timeout
   const makeApiCall = async (url, options = {}) => {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+    const timeoutId = setTimeout(() => controller.abort(), 60000); // Increased to 60 seconds
     
     try {
+      console.log(`Making API call to: ${url}`);
+      console.log(`Request options:`, options);
+      
       const response = await fetch(url, {
         ...options,
         signal: controller.signal,
+        headers: {
+          'Content-Type': 'application/json',
+          ...options.headers,
+        },
       });
       
       clearTimeout(timeoutId);
+      console.log(`Response status: ${response.status}`);
       return response;
     } catch (error) {
       clearTimeout(timeoutId);
+      console.error('API call failed:', error);
       
       if (error.name === 'AbortError') {
         throw new Error('Request timed out. Please check your connection and try again.');
       }
-      throw error;
+      
+      // Network error
+      if (!navigator.onLine) {
+        throw new Error('No internet connection. Please check your network.');
+      }
+      
+      throw new Error(`Network error: ${error.message}`);
     }
   };
   
@@ -74,14 +89,40 @@ export const AuthProvider = ({ children }) => {
     initializeAuth();
   }, [API_BASE_URL]);
 
+  // Test API connection
+  const testConnection = async () => {
+    try {
+      console.log('Testing API connection...');
+      const response = await makeApiCall(`${API_BASE_URL}/health`);
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('API connection test successful:', data);
+        return true;
+      } else {
+        console.error('API connection test failed:', response.status);
+        return false;
+      }
+    } catch (error) {
+      console.error('API connection test error:', error);
+      return false;
+    }
+  };
+
   // Login function
   const login = async (email, password) => {
     try {
       setLoading(true);
       setError(null);
 
+      // First test the connection
+      const connectionOk = await testConnection();
+      if (!connectionOk) {
+        throw new Error('Cannot connect to server. Please try again later.');
+      }
+
       console.log('Attempting login to:', `${API_BASE_URL}/auth/login`); // Debug log
-      console.log('Request payload:', { email, password }); // Debug log
+      console.log('Request payload:', { email, password: '***' }); // Debug log (hide password)
 
       const response = await makeApiCall(`${API_BASE_URL}/auth/login`, {
         method: 'POST',
@@ -131,6 +172,12 @@ export const AuthProvider = ({ children }) => {
     try {
       setLoading(true);
       setError(null);
+
+      // First test the connection
+      const connectionOk = await testConnection();
+      if (!connectionOk) {
+        throw new Error('Cannot connect to server. Please try again later.');
+      }
 
       console.log('Attempting registration to:', `${API_BASE_URL}/auth/register`); // Debug log
 
@@ -306,6 +353,7 @@ export const AuthProvider = ({ children }) => {
     updateProfile,
     isAuthenticated,
     getAuthHeaders,
+    testConnection,
     setError, // Allow manual error clearing
     API_BASE_URL, // Expose API base URL for debugging
   };
