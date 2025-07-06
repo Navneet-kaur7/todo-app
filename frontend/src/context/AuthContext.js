@@ -17,10 +17,33 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Use relative URLs in production to work with Vercel routing
+  // Use relative URL for production to avoid CORS issues
   const API_BASE_URL = process.env.NODE_ENV === 'production' 
-    ? '/api'  // Use relative URL - Vercel will handle the routing
+    ? '/api'  // Relative URL - let Vercel handle routing
     : 'http://localhost:5000/api';
+  
+  // Utility function to make API calls with timeout
+  const makeApiCall = async (url, options = {}) => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+    
+    try {
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+      return response;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      
+      if (error.name === 'AbortError') {
+        throw new Error('Request timed out. Please check your connection and try again.');
+      }
+      throw error;
+    }
+  };
   
   // Check if user is logged in on app start
   useEffect(() => {
@@ -60,41 +83,30 @@ export const AuthProvider = ({ children }) => {
       console.log('Attempting login to:', `${API_BASE_URL}/auth/login`); // Debug log
       console.log('Request payload:', { email, password }); // Debug log
 
-      // Add timeout to prevent hanging
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
-
-      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+      const response = await makeApiCall(`${API_BASE_URL}/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ email, password }),
-        signal: controller.signal,
       });
 
-      clearTimeout(timeoutId);
-
-      console.log('Login response received'); // Debug log
       console.log('Login response status:', response.status); // Debug log
-      console.log('Login response ok:', response.ok); // Debug log
 
-      // Check if response is JSON
-      const contentType = response.headers.get('content-type');
-      console.log('Response content-type:', contentType); // Debug log
-
-      if (!contentType || !contentType.includes('application/json')) {
-        const textResponse = await response.text();
-        console.log('Non-JSON response:', textResponse); // Debug log
-        throw new Error('Server returned non-JSON response');
+      if (!response.ok) {
+        // Try to get error message from response
+        let errorMessage = 'Login failed';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || `HTTP ${response.status}: ${response.statusText}`;
+        } catch (parseError) {
+          errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        }
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
       console.log('Login response data:', data); // Debug log
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Login failed');
-      }
 
       // Save to state and localStorage
       setToken(data.token);
@@ -106,14 +118,7 @@ export const AuthProvider = ({ children }) => {
       return { success: true, message: 'Login successful' };
     } catch (error) {
       console.error('Login error:', error);
-      let errorMessage;
-      
-      if (error.name === 'AbortError') {
-        errorMessage = 'Request timed out. Please try again.';
-      } else {
-        errorMessage = error.message || 'Login failed';
-      }
-      
+      const errorMessage = error.message || 'Login failed';
       setError(errorMessage);
       return { success: false, message: errorMessage };
     } finally {
@@ -129,7 +134,7 @@ export const AuthProvider = ({ children }) => {
 
       console.log('Attempting registration to:', `${API_BASE_URL}/auth/register`); // Debug log
 
-      const response = await fetch(`${API_BASE_URL}/auth/register`, {
+      const response = await makeApiCall(`${API_BASE_URL}/auth/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -139,12 +144,19 @@ export const AuthProvider = ({ children }) => {
 
       console.log('Register response status:', response.status); // Debug log
 
+      if (!response.ok) {
+        let errorMessage = 'Registration failed';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || `HTTP ${response.status}: ${response.statusText}`;
+        } catch (parseError) {
+          errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        }
+        throw new Error(errorMessage);
+      }
+
       const data = await response.json();
       console.log('Register response data:', data); // Debug log
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Registration failed');
-      }
 
       // Auto-login after successful registration
       setToken(data.token);
@@ -170,7 +182,7 @@ export const AuthProvider = ({ children }) => {
       // Optional: Call logout endpoint
       if (token) {
         try {
-          await fetch(`${API_BASE_URL}/auth/logout`, {
+          await makeApiCall(`${API_BASE_URL}/auth/logout`, {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${token}`,
@@ -201,18 +213,24 @@ export const AuthProvider = ({ children }) => {
         throw new Error('No token available');
       }
 
-      const response = await fetch(`${API_BASE_URL}/auth/profile`, {
+      const response = await makeApiCall(`${API_BASE_URL}/auth/profile`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
       });
 
-      const data = await response.json();
-
       if (!response.ok) {
-        throw new Error(data.message || 'Failed to fetch profile');
+        let errorMessage = 'Failed to fetch profile';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || `HTTP ${response.status}: ${response.statusText}`;
+        } catch (parseError) {
+          errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        }
+        throw new Error(errorMessage);
       }
 
+      const data = await response.json();
       setUser(data.user);
       localStorage.setItem('todoapp_user', JSON.stringify(data.user));
       return { success: true, user: data.user };
@@ -232,7 +250,7 @@ export const AuthProvider = ({ children }) => {
         throw new Error('No token available');
       }
 
-      const response = await fetch(`${API_BASE_URL}/auth/profile`, {
+      const response = await makeApiCall(`${API_BASE_URL}/auth/profile`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -241,12 +259,18 @@ export const AuthProvider = ({ children }) => {
         body: JSON.stringify({ name }),
       });
 
-      const data = await response.json();
-
       if (!response.ok) {
-        throw new Error(data.message || 'Profile update failed');
+        let errorMessage = 'Profile update failed';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || `HTTP ${response.status}: ${response.statusText}`;
+        } catch (parseError) {
+          errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        }
+        throw new Error(errorMessage);
       }
 
+      const data = await response.json();
       setUser(data.user);
       localStorage.setItem('todoapp_user', JSON.stringify(data.user));
 
