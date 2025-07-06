@@ -58,6 +58,11 @@ export const AuthProvider = ({ children }) => {
       setError(null);
 
       console.log('Attempting login to:', `${API_BASE_URL}/auth/login`); // Debug log
+      console.log('Request payload:', { email, password }); // Debug log
+
+      // Add timeout to prevent hanging
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
 
       const response = await fetch(`${API_BASE_URL}/auth/login`, {
         method: 'POST',
@@ -65,9 +70,24 @@ export const AuthProvider = ({ children }) => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ email, password }),
+        signal: controller.signal,
       });
 
+      clearTimeout(timeoutId);
+
+      console.log('Login response received'); // Debug log
       console.log('Login response status:', response.status); // Debug log
+      console.log('Login response ok:', response.ok); // Debug log
+
+      // Check if response is JSON
+      const contentType = response.headers.get('content-type');
+      console.log('Response content-type:', contentType); // Debug log
+
+      if (!contentType || !contentType.includes('application/json')) {
+        const textResponse = await response.text();
+        console.log('Non-JSON response:', textResponse); // Debug log
+        throw new Error('Server returned non-JSON response');
+      }
 
       const data = await response.json();
       console.log('Login response data:', data); // Debug log
@@ -86,7 +106,14 @@ export const AuthProvider = ({ children }) => {
       return { success: true, message: 'Login successful' };
     } catch (error) {
       console.error('Login error:', error);
-      const errorMessage = error.message || 'Login failed';
+      let errorMessage;
+      
+      if (error.name === 'AbortError') {
+        errorMessage = 'Request timed out. Please try again.';
+      } else {
+        errorMessage = error.message || 'Login failed';
+      }
+      
       setError(errorMessage);
       return { success: false, message: errorMessage };
     } finally {

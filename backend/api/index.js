@@ -8,19 +8,20 @@ dotenv.config();
 
 const app = express();
 
-// Middleware
-
-
-// Option 1: Allow specific origins (Recommended for production)
+// CORS configuration
 const corsOptions = {
   origin: [
     'http://localhost:3000',           // Local development
     'https://todo-app-kappa-green-45.vercel.app', // Your Vercel deployment
-    // Add other domains if needed
   ],
   credentials: true,
   optionsSuccessStatus: 200
 };
+
+// Apply CORS middleware FIRST
+app.use(cors(corsOptions));
+
+// Other middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
