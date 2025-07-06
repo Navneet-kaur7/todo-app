@@ -12,7 +12,7 @@ const app = express();
 const corsOptions = {
   origin: [
     'http://localhost:3000',           // Local development
-    'https://todo-app-kappa-green-45.vercel.app', // Your Vercel deployment
+    'https://todo-app-gules-nu-52.vercel.app', // Your Vercel deployment
   ],
   credentials: true,
   optionsSuccessStatus: 200
