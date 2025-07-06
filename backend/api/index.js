@@ -9,10 +9,18 @@ dotenv.config();
 const app = express();
 
 // Middleware
-app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-  credentials: true
-}));
+
+
+// Option 1: Allow specific origins (Recommended for production)
+const corsOptions = {
+  origin: [
+    'http://localhost:3000',           // Local development
+    'https://todo-app-kappa-green-45.vercel.app', // Your Vercel deployment
+    // Add other domains if needed
+  ],
+  credentials: true,
+  optionsSuccessStatus: 200
+};
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
