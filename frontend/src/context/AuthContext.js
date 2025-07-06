@@ -17,10 +17,10 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Use consistent API base URL configuration
-const API_BASE_URL = process.env.NODE_ENV === 'production' 
-  ? 'https://todo-app-kappa-green-45.vercel.app/api'
-  : 'http://localhost:5000/api';
+  // Use relative URLs in production to work with Vercel routing
+  const API_BASE_URL = process.env.NODE_ENV === 'production' 
+    ? '/api'  // Use relative URL - Vercel will handle the routing
+    : 'http://localhost:5000/api';
   
   // Check if user is logged in on app start
   useEffect(() => {
